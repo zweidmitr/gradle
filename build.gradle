@@ -1,113 +1,112 @@
-println "configuration phase"
-println "gradle id: ${gradle.hashCode()}"
-println "root: ${rootProject.hashCode()}}"
-
-// task = new DefaultDask
-//3
-def map = [description: "Hello task", group: "zweim"]
-//task("hello") {
-//    println "configuration phase. Task hello"
-//    println "task: $description, group: $group, actions: ${actions.size()}"
-//}
-//Project ->[Task1, Task2]
-//Task -> [Action1, Action2] ->action.execution (execution phase)
-task hello(description: "Hello task", group: "zweim", type: DefaultTask) {
-    println "configuration phase. Task hello"
-//    description = "Hello task"
-//    group = "zweim"
-
-    doLast {
-        println "execution phase, Action1 - (2)"
-    }
-    doFirst {
-        println "execution phase, Action2 - (1)"
-    }
-    doLast {
-        println "execution phase, Action3 - (3)"
-    }
-    println "task: $description, group: $group, actions: ${actions.size()}"
-    println "path task: $path"
+plugins {
+    id 'java'
+    id 'war'
 }
 
-//gradle.taskGraph.allTasks
+apply from: 'script.gradle'
+//apply plugin: CustomPlugin
+//apply plugin: 'custom'
+//apply plugin: 'java'
 
-//hello.doFirst {
-//
-//}
-
-//tasks.findByName("hello").
-//1
-//hello.description = "Hello task"
-//hello.group = "zweim"
-
-//2
-//hello.configure Closure
-//hello {
-//    println "configuration phase. Task hello"
-//    description = "Hello task"
-//    group = "zweim"
-//}
-
-task first {
-    doLast {
-        println "Task 1"
-    }
+repositories {
+//    ~/.gradle/caches --offline
+//    ~/.m2/repository
+//    mavenLocal()
+//    maven {
+//        name "nexus zweim"
+//        uri "https://nexus.zweim/repository"
+//    }
+    mavenCentral()
 }
-task second {
-    doLast {
-        println "Task 2"
-    }
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_16
+    targetCompatibility = JavaVersion.VERSION_16
 }
-task third {
-    doLast {
-        println "Task 3"
+
+configurations {
+
+    def configuration = getByName("implementation")
+    zweim {
+        description = "zweim  configuration"
     }
-}
-task fourth(group: "zweim") {
-    doLast {
-        println "Task 4"
+    configuration.extendsFrom(zweim)
+
+    all {
+        resolutionStrategy {
+//            force('org.springframework:spring-aop:5.3.8')
+        }
     }
 }
 
-//// 2 <--- 4
-//// depends  - перед fourth -> second
-//fourth.dependsOn second
-//second.dependsOn first
-//
-//// finalizedBy  - после second -> third
-//second.finalizedBy third
+dependencies {
+    compileOnly "jakarta.servlet:jakarta.servlet-api:5.0.0"
 
-fourth.dependsOn first
-fourth.dependsOn second
-fourth.dependsOn third
+    // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-dependencies
+    compileOnly platform('org.springframework.boot:spring-boot-dependencies:2.6.7')
 
-//first after second
-first.mustRunAfter second
-//second.shouldRnAfter first
-
-println " ***"
-gradle.taskGraph.whenReady { TaskExecutionGraph graph ->
-    println "---- Graph:"
-    graph.allTasks.each {
-        println "${it.name}"
+//    add('implementation',[group:"org.springframework",name: 'spring-webmvc',version: '5.3.20'])
+//    add('implementation',group:"org.springframework:spring-webmvc:version:5.3.20")
+    implementation("org.springframework:spring-webmvc:5.3.20") {
+//        transitive(false)
+//        exclude(group: "org.springframework", module:"spring-aop")
+    }
+    implementation('org.springframework:spring-aop:5.3.20') {
+//        force(true)
     }
 }
 
-gradle.taskGraph.beforeTask { Task task ->
-    if (task.group == 'zweim') {
-        println "beforeTask callBak $task"
+
+configurations.runtimeClasspath.files.each { println it }
+jar {
+
+    def jars = configurations.runtimeClasspath.files.collect { "lib/$it.name" }
+    manifest {
+        attributes 'Main-Class': 'com.zwei.HelloWorld',
+                'Class-Path': jars.join(' ')
     }
+//    duplicatesStrategy(DuplicatesStrategy.EXCLUDE)
+//    from(configurations.runtimeClasspath.files.collect {zipTree(it)})
 }
 
-gradle.taskGraph.afterTask {Task task ->
-    if(task.name == 'first') {
-        println "afteTask callBak $task"
+task copyAllDependecies(type: Copy) {
+    from(configurations.runtimeClasspath.files)
+    into("$buildDir/libs/lib")
+}
+jar.dependsOn copyAllDependecies
+
+war {
+    archiveName("zweim.war")
+}
+task deployTomcat(type: Copy) {
+    from(war.archiveFile.get())
+    into("G:\\Tools\\apache-tomcat-10.0.21\\webapps")
+}
+deployTomcat.dependsOn war
+assemble.dependsOn deployTomcat
+
+// buildSrc -- id 'custom'
+class CustomPlugin implements Plugin<Project> {
+    @Override
+    void apply(Project project) {
+        addHelloTask(project)
+    }
+
+    void addHelloTask(Project project) {
+        def map = [description: "Hello task", group: "zweim", type: DefaultTask]
+        project.task(map, "hello") {
+            println "configuration phase. Task hello"
+            doLast {
+                println "execution phase, Action1 - (2)"
+            }
+            doFirst {
+                println "execution phase, Action2 - (1)"
+            }
+            doLast {
+                println "execution phase, Action3 - (3)"
+            }
+            println "task: $description, group: $group, actions: ${actions.size()}"
+            println "path task: $path"
+        }
     }
 }
-
-defaultTasks "fourth"
-
-
-//2
-//1  4
-//3
